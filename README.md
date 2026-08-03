@@ -1,8 +1,8 @@
-<img width="1920" height="1079" alt="image" src="https://github.com/user-attachments/assets/0f561d5b-1e19-4a83-8c58-17cf2cdf0beb" /># 📌 Portfolio 2: AI Lead Scoring & Priority Router
+📌 Portfolio 2: AI Lead Scoring & Priority Router
 
 An automated AI triage engine built with **n8n** and **Google Gemini AI** to automatically qualify inbound sales leads and route high-value opportunities to sales teams in real time.
 
-![AI scoring](portfolio2.png)
+![AI scoring](Portfolio2.png)
 ---
 
 ## 🎯 Business Problem
