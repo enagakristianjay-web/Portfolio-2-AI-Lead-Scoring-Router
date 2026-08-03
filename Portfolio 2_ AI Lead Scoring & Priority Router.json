@@ -1,0 +1,412 @@
+{
+  "name": "Portfolio 2: AI Lead Scoring & Priority Router",
+  "nodes": [
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        304,
+        32
+      ],
+      "id": "34dc897c-55d1-48c3-b989-21c4ba45f37d",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "XbntAfEXCYTUyalp",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert sales lead qualification engine.\n\nYour task is to analyze the incoming lead data and classify the lead as either **high** or **low** priority.\n\n## Evaluation rules\n\nAssign **high** priority if ANY of the following conditions are true:\n\n* Budget is **$10,000 or greater**\n* Company size is **500+** or **1000+**\n* The message indicates **urgent enterprise intent**, such as:\n\n  * ASAP\n  * immediately\n  * urgent\n  * enterprise deployment\n  * replace existing system\n  * migration\n  * proof of concept (POC)\n  * pilot program\n  * multi-team rollout\n  * enterprise-grade solution\n\nAssign **low** priority if ANY of the following conditions are true:\n\n* Budget is **under $2,000** AND company size is **under 50 employees**\n* The message is primarily about:\n\n  * pricing inquiry\n  * free trial\n  * basic automation\n  * personal use\n  * very small business automation\n\nIf information is incomplete, make the best reasonable judgment based on the available data.\n\n## Output requirements\n\nReturn **only valid JSON** with no markdown, code fences, or additional text.\n\nUse this exact schema:\n\n{\n\"priority\": \"high\",\n\"reason\": \"Budget exceeds $10,000 and the message indicates urgent enterprise deployment.\"\n}\n\nor\n\n{\n\"priority\": \"low\",\n\"reason\": \"Small company with a low budget and a general automation inquiry.\"\n}\n\nIncoming Lead Data:\n{{ JSON.stringify($json.body) }}\n",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {
+          "batchSize": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        224,
+        -192
+      ],
+      "id": "f1ef649d-deae-4137-a593-255654c46e24",
+      "name": "Determine Priority",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3ff8e509-1522-4759-9e3e-30a8df27da92",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -192
+      ],
+      "id": "a8482967-a844-4393-aaf2-996953038ea8",
+      "name": "IncomingLeadData",
+      "webhookId": "3ff8e509-1522-4759-9e3e-30a8df27da92"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6614369d-675c-4c68-8d8d-0befca2f7108",
+              "leftValue": "={{ JSON.parse($json.text.replace(/```json|```/g, '')).priority }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        592,
+        -192
+      ],
+      "id": "fc2122ae-3449-4459-a8c4-a84d0b8a4fd5",
+      "name": "HighPriorityOrStandardLeads"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0BM4HBFTT9",
+          "mode": "list",
+          "cachedResultName": "priority_leads"
+        },
+        "text": "=🚨 High Priority Lead Alert!\n\nLead Name: {{ $('IncomingLeadData').item.json.body.prospect_name }}\nCompany Size: {{ $('IncomingLeadData').item.json.body.company_size }}\nEmail: {{ $('IncomingLeadData').item.json.body.prospect_email }}\n\nReason: {{ JSON.parse($('HighPriorityOrStandardLeads').item.json.text).reason }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        800,
+        -288
+      ],
+      "id": "ea43294f-6d20-49e8-ad7a-b818bb8f480f",
+      "name": "SlackNotifyHighLeads",
+      "webhookId": "91ceff61-e2ea-4961-adf3-6d69fbee66dc",
+      "credentials": {
+        "slackApi": {
+          "id": "CAfJanGAVuxflX0K",
+          "name": "Slack account Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('IncomingLeadData').item.json.body.prospect_email }}",
+        "subject": "=Thank you for reaching out, {{ $('IncomingLeadData').item.json.body.prospect_name }}!",
+        "message": "=<p>Hi {{ $('IncomingLeadData').item.json.body.prospect_name }},</p>\n\n<p>Thanks for reaching out to us! We received your request regarding an automation solution for <strong>{{ $('IncomingLeadData').item.json.body.company_size }}</strong> employees.</p>\n\n<p>Here is our self-service information package to help you get started while our team reviews your details.</p>\n\n<p>Best regards,<br>Sales & Automation Team</p>",
+        "options": {
+          "bccList": "enagakistianjay@gmail.com"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        -96
+      ],
+      "id": "aed836fd-e79d-4f5b-8c0d-b5246a5289a0",
+      "name": "AutoReplyLowPriorityLead",
+      "webhookId": "dce74114-bf46-45b6-bd89-b079a7b5f403",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Tz92W2mMBqoVhpoB",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1-lm0PWvWZe1vb1wxpLLL7GKcNXyAi7aaW7DxFo9U_bs",
+          "mode": "list",
+          "cachedResultName": "Inbound Leads Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-lm0PWvWZe1vb1wxpLLL7GKcNXyAi7aaW7DxFo9U_bs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Leads_2026",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-lm0PWvWZe1vb1wxpLLL7GKcNXyAi7aaW7DxFo9U_bs/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now }}",
+            "Prospect Name": "={{ $('IncomingLeadData').item.json.body.prospect_name }}",
+            "Email": "={{ $('IncomingLeadData').item.json.body.prospect_email }}",
+            "Company Size": "={{ $('IncomingLeadData').item.json.body.company_size }}",
+            "Budget": "={{ $('IncomingLeadData').item.json.body.budget }}",
+            "AI Reason": "={{ JSON.parse($('Determine Priority').item.json.text).reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Prospect Name",
+              "displayName": "Prospect Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Company Size",
+              "displayName": "Company Size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Reason",
+              "displayName": "AI Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1024,
+        -96
+      ],
+      "id": "00ab0ae6-19cf-4d9f-a1dc-1afb7685e2d1",
+      "name": "Inbound Leads Log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "D0I4vFupIgPdJfgx",
+          "name": "Google Sheets account enagakristianjay@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📌 PORTFOLIO 2: AI LEAD SCORING & PRIORITY ROUTER\n\n🎯 Business Problem:\nSales teams waste up to 70% of their day reviewing low-budget inquiries, while high-value enterprise prospects wait hours for a reply, leading to lost deals and low conversion rates.\n\n🚀 The Solution:\nAutomated AI triage engine:\n1. Webhook receives raw lead payload.\n2. Google Gemini evaluates budget, company size, and urgency.\n3. IF Node routes leads based on AI boolean score.\n4. High-value leads trigger instant VIP alerts; standard leads receive an automated info packet.\n5. All leads are logged centrally in Google Sheets.\n\n💰 Business Impact & ROI:\n• Instant VIP response times (0-second triage).\n• 100% elimination of manual lead qualification overhead.\n• Maximized sales pipeline efficiency and revenue capture.",
+        "height": 512,
+        "width": 592,
+        "color": "#B81929"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -784
+      ],
+      "id": "6f682a3f-bb5e-42f2-ad8c-73f571d7baab",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "🤖 AI LEAD QUALIFICATION ENGINE (GEMINI)\n\n🎯 Business Purpose:\nAutomatically reads incoming lead details and classifies them into \"High\" or \"Low\" priority using natural language evaluation.\n\n📋 Scoring Criteria:\n• HIGH PRIORITY:\n  - Budget ≥ $10,000\n  - Enterprise size (500+ or 1,000+ employees)\n  - High urgency / immediate replacement needs (\"ASAP\", enterprise POC)\n\n• LOW PRIORITY:\n  - Budget < $2,000 with company size < 50 employees\n  - General pricing questions or self-service trial requests\n\n📤 Output Delivered:\nOutputs a structured decision (`high` or `low`) along with an AI-generated explanation for the sales team.",
+        "height": 480,
+        "width": 544,
+        "color": "#112B92"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -752
+      ],
+      "id": "c888f564-927d-488d-b342-f266b4bc5a26",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "⚡ DYNAMIC EXECUTION PATHS\n\n• TRUE Branch (VIP): Instant alert sent to Slack channel with AI reasoning for immediate sales team intervention.\n• FALSE Branch (Standard): Auto-reply sent via Gmail with self-service resources.\n• Database Sync: Appends all scored lead metadata to Google Sheets CRM log.",
+        "height": 208,
+        "width": 544,
+        "color": "#0B5F89"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -544
+      ],
+      "id": "026b3f41-819f-46ea-b6aa-6f7a15d5eb3a",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Determine Priority",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Priority": {
+      "main": [
+        [
+          {
+            "node": "HighPriorityOrStandardLeads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IncomingLeadData": {
+      "main": [
+        [
+          {
+            "node": "Determine Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HighPriorityOrStandardLeads": {
+      "main": [
+        [
+          {
+            "node": "SlackNotifyHighLeads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AutoReplyLowPriorityLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AutoReplyLowPriorityLead": {
+      "main": [
+        [
+          {
+            "node": "Inbound Leads Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Singapore",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "2yoUrGUAyISOvdAX",
+    "executionTimeout": -1
+  },
+  "versionId": "a176b53f-687c-49b0-b290-99f7acd611fa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8c4cd777a5b3ec797918101641527b114bf980b11c0134f7edc5eb4d08953d59"
+  },
+  "nodeGroups": [],
+  "id": "JcbJKtMexvdokhnk",
+  "tags": [
+    {
+      "updatedAt": "2026-08-02T15:05:16.574Z",
+      "createdAt": "2026-08-02T15:05:16.574Z",
+      "id": "DR2mwbQrmjghmOnX",
+      "name": "v1"
+    },
+    {
+      "updatedAt": "2026-07-30T13:24:38.045Z",
+      "createdAt": "2026-07-30T13:24:38.045Z",
+      "id": "DwYBj19cUeFUwfIQ",
+      "name": "sprint 1 portfolio build"
+    },
+    {
+      "updatedAt": "2026-07-27T01:41:52.052Z",
+      "createdAt": "2026-07-27T01:41:52.052Z",
+      "id": "mWLPR4lPdrQ8hfmc",
+      "name": "portfolio"
+    }
+  ]
+}
